@@ -1,0 +1,26 @@
+[package]
+name = "paperfetcher"
+version = "0.1.0"
+edition = "2024"
+description = "LLM-agent-friendly CLI for searching and fetching academic papers"
+keywords = ["academic", "paper", "doi", "cli"]
+license = "MIT"
+
+[dependencies]
+clap = { version = "4", features = ["derive", "env", "string"] }
+clap_complete = "4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+thiserror = "2"
+anyhow = "1"
+toml = "0.8"
+dirs = "6"
+url = "2"
+chrono = { version = "0.4", features = ["serde"] }
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
