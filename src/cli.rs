@@ -209,4 +209,39 @@ pub enum Commands {
         /// 目标 shell 类型
         shell: clap_complete::Shell,
     },
+
+    /// 管理本地配置
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ConfigAction {
+    /// 显示当前配置
+    Show,
+
+    /// 设置配置项
+    Set {
+        /// 设置默认邮箱
+        #[arg(long)]
+        email: Option<String>,
+
+        /// 设置默认输出格式
+        #[arg(long)]
+        output: Option<CliOutputFormat>,
+
+        /// 设置默认搜索返回数量
+        #[arg(long)]
+        limit: Option<u32>,
+
+        /// 设置最大并发下载数
+        #[arg(long)]
+        max_concurrent: Option<usize>,
+
+        /// 设置下载超时（秒）
+        #[arg(long)]
+        timeout_secs: Option<u64>,
+    },
 }

@@ -12,6 +12,7 @@ pub struct Config {
     /// 用户邮箱（必填，用于 API 礼貌池）
     pub email: String,
     /// 本地数据目录
+    #[serde(default = "default_data_dir")]
     pub data_dir: PathBuf,
     /// 默认输出格式
     #[serde(default)]
@@ -29,6 +30,7 @@ pub struct Config {
 
 /// 搜索相关配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SearchConfig {
     /// 默认返回数量
     pub default_limit: u32,
@@ -47,6 +49,7 @@ impl Default for SearchConfig {
 
 /// 下载相关配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct FetchConfig {
     /// 最大并发下载数
     pub max_concurrent: usize,
@@ -71,6 +74,7 @@ impl Default for FetchConfig {
 
 /// 数据源相关配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SourcesConfig {
     /// PDF 下载回退顺序
     pub pdf_sources: Vec<SourceName>,
@@ -173,7 +177,7 @@ impl Config {
 }
 
 /// 默认配置文件路径
-fn default_config_path() -> PathBuf {
+pub fn default_config_path() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("paperfetcher")

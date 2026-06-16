@@ -162,9 +162,13 @@ async fn dispatch_command(
             Ok(serde_json::to_value(resp)?)
         }
 
-        // Schema 和 Completions 已在前面处理
         Commands::Schema { .. } | Commands::Completions { .. } => {
             unreachable!("handled before dispatch")
+        }
+
+        Commands::Config { action } => {
+            let resp = commands::config::execute(action.clone(), config)?;
+            Ok(serde_json::to_value(resp)?)
         }
     }
 }

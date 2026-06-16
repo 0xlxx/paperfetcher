@@ -6,3 +6,4 @@ pub mod lookup;
 pub mod remove;
 pub mod search;
 pub mod status;
+pub mod config;
