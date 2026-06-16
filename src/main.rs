@@ -105,7 +105,7 @@ async fn dispatch_command(
 
         Commands::Fetch {
             doi_or_file,
-            output_dir: _,
+            output_dir,
             filename_template: _,
             overwrite,
             with_metadata,
@@ -113,20 +113,29 @@ async fn dispatch_command(
             timeout,
             source,
             stdin,
+            stdout,
         } => {
             let source_names: Vec<sources::SourceName> =
                 source.iter().map(|s| (*s).into()).collect();
+
             let resp = commands::fetch::execute(
                 doi_or_file.as_deref(),
                 *stdin,
+                output_dir.clone(),
                 *overwrite,
                 *with_metadata,
+                *stdout,
                 *max_concurrent,
                 *timeout,
                 &source_names,
                 config,
             )
             .await?;
+            if *stdout {
+                // Return an empty JSON value so dispatch_command won't print anything to stdout.
+                // Better: if stdout is true, we can exit early.
+                std::process::exit(0);
+            }
             Ok(serde_json::to_value(resp)?)
         }
 

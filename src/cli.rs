@@ -157,6 +157,10 @@ pub enum Commands {
         /// 从 stdin 读取 DOI 列表
         #[arg(long)]
         stdin: bool,
+
+        /// 将 PDF 二进制直接输出到标准输出 (stdout)
+        #[arg(long)]
+        stdout: bool,
     },
 
     /// 列出本地已下载的论文

@@ -5,12 +5,12 @@ use std::time::Duration;
 
 use crate::config::Config;
 use crate::error::AppError;
-use crate::models::paper::{FetchAction, FetchResult, FetchSummary, LocalPaperEntry};
+use crate::models::paper::{FetchAction, FetchResult, FetchSummary};
 use crate::models::response::FetchResponse;
 use crate::output::eprintln_info;
 use crate::sources::{self, SourceName, PaperSource};
 use crate::storage::download::Downloader;
-use crate::storage::index::LocalIndex;
+use std::path::PathBuf;
 
 /// 执行下载命令
 ///
@@ -22,8 +22,10 @@ use crate::storage::index::LocalIndex;
 pub async fn execute(
     doi_or_file: Option<&str>,
     from_stdin: bool,
+    output_dir: Option<PathBuf>,
     overwrite: bool,
     with_metadata: bool,
+    stdout: bool,
     max_concurrent: usize,
     timeout: u64,
     source_names: &[SourceName],
@@ -44,7 +46,13 @@ pub async fn execute(
         });
     }
 
-    eprintln_info(&format!("preparing to fetch {} paper(s)", dois.len()));
+    if stdout && dois.len() > 1 {
+        return Err(AppError::ParseError("Cannot output to stdout when fetching multiple DOIs. Please specify only one DOI.".to_string()));
+    }
+
+    if !stdout {
+        eprintln_info(&format!("preparing to fetch {} paper(s)", dois.len()));
+    }
 
     // 第二步：初始化下载器和数据源
     let client = reqwest::Client::builder()
@@ -60,20 +68,24 @@ pub async fn execute(
         source_names.to_vec()
     };
 
+    let actual_output_dir = output_dir.unwrap_or_else(|| {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    });
+
     let downloader = Downloader::new(
         client.clone(),
-        config.data_dir.clone(),
+        actual_output_dir,
         max_concurrent,
         Duration::from_secs(timeout),
     );
 
-    // 加载本地索引
-    let mut index = LocalIndex::load(&config.data_dir)?;
     let mut results = Vec::new();
 
     // 第三步：逐个处理 DOI（回退策略获取 PDF URL）
     for doi in &dois {
-        eprintln_info(&format!("processing: {doi}"));
+        if !stdout {
+            eprintln_info(&format!("processing: {doi}"));
+        }
 
         let result = fetch_single_paper(
             doi,
@@ -83,25 +95,12 @@ pub async fn execute(
             &downloader,
             overwrite,
             with_metadata,
+            stdout,
         )
         .await;
 
         match result {
             Ok(fetch_result) => {
-                // 如果下载成功，更新索引
-                if fetch_result.action == FetchAction::Downloaded {
-                    let entry = LocalPaperEntry {
-                        doi: doi.clone(),
-                        title: String::new(), // 如果有元数据会在后续更新
-                        authors: Vec::new(),
-                        year: None,
-                        pdf_path: fetch_result.path.clone().unwrap_or_default(),
-                        metadata_path: fetch_result.metadata_path.clone(),
-                        downloaded_at: chrono::Utc::now().to_rfc3339(),
-                        size_bytes: fetch_result.size_bytes.unwrap_or(0),
-                    };
-                    index.add_entry(entry);
-                }
                 results.push(fetch_result);
             }
             Err(e) => {
@@ -118,9 +117,6 @@ pub async fn execute(
             }
         }
     }
-
-    // 保存索引
-    index.save()?;
 
     // 统计摘要
     let summary = FetchSummary {
@@ -139,10 +135,12 @@ pub async fn execute(
             .count() as u32,
     };
 
-    eprintln_info(&format!(
-        "fetch complete: {} downloaded, {} skipped, {} failed",
-        summary.downloaded, summary.skipped, summary.failed
-    ));
+    if !stdout {
+        eprintln_info(&format!(
+            "fetch complete: {} downloaded, {} skipped, {} failed",
+            summary.downloaded, summary.skipped, summary.failed
+        ));
+    }
 
     Ok(FetchResponse { results, summary })
 }
@@ -156,13 +154,17 @@ async fn fetch_single_paper(
     downloader: &Downloader,
     overwrite: bool,
     with_metadata: bool,
+    write_to_stdout: bool,
 ) -> Result<FetchResult, AppError> {
     let mut last_error: Option<AppError> = None;
 
     // 依次尝试每个数据源获取 PDF URL
     for &source_name in source_names {
         let source = sources::create_source(source_name, client, email);
-        eprintln_info(&format!("  trying source: {}", source.name()));
+        
+        if !write_to_stdout {
+            eprintln_info(&format!("  trying source: {}", source.name()));
+        }
 
         // 尝试获取 PDF URL
         match source.get_pdf_url(doi).await {
@@ -175,23 +177,27 @@ async fn fetch_single_paper(
                 };
 
                 let mut result = downloader
-                    .download_paper(doi, &url, overwrite, metadata.as_ref())
+                    .download_paper(doi, &url, overwrite, metadata.as_ref(), write_to_stdout)
                     .await?;
                 result.source = Some(source.name().to_string());
                 return Ok(result);
             }
             Ok(None) => {
-                eprintln_info(&format!(
-                    "  no PDF URL found from {}",
-                    source.name()
-                ));
+                if !write_to_stdout {
+                    eprintln_info(&format!(
+                        "  no PDF URL found from {}",
+                        source.name()
+                    ));
+                }
                 continue;
             }
             Err(e) => {
-                eprintln_info(&format!(
-                    "  error from {}: {e}",
-                    source.name()
-                ));
+                if !write_to_stdout {
+                    eprintln_info(&format!(
+                        "  error from {}: {e}",
+                        source.name()
+                    ));
+                }
                 last_error = Some(e);
                 continue;
             }
